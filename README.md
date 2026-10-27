@@ -17,13 +17,26 @@ The plugin stores the assignments, writes the tokens, and installs the view.
 ## Requirements
 
 - Herdr 0.9.1 or newer (verified against 0.9.1 and 0.9.5)
-- `node` on `PATH` (18+); no dependencies, no build step
+- Node.js 18+ somewhere findable; no dependencies, no build step
+
+`bin/run.sh` resolves the runtime instead of trusting `PATH`, because Herdr
+runs plugin commands with the server's environment, which may be minimal. It
+tries `PATH` first, then `~/.local/bin`, mise/asdf shims, `/opt/homebrew/bin`,
+`/usr/local/bin`, and nvm/fnm version directories. Set `AGENT_GROUPS_NODE` to
+override.
 
 ## Install
 
 ```bash
-herdr plugin link ~/Projects/herdr-agent-groups
+herdr plugin install igor-gorohovsky/herdr-agent-groups
 herdr plugin list --plugin agent-groups
+herdr plugin action invoke agent-groups.list
+```
+
+For local development, link the working copy instead:
+
+```bash
+herdr plugin link ~/Projects/herdr-agent-groups
 ```
 
 Then add what you want to your `~/.config/herdr/config.toml` and reload:
@@ -84,6 +97,28 @@ node bin/cli.js view groups          # sort the Agent panel by group
 node bin/cli.js view group "TODO"    # show only one group
 node bin/cli.js view off             # hand the sidebar back to Herdr
 ```
+
+## Local and remote machines
+
+Herdr registers plugins **per user, per machine**, and plugin actions run on the
+server you are viewing. Copy the plugin onto every machine that runs agents.
+
+```bash
+# on the remote host itself (plugin install is not forwardable)
+herdr plugin install igor-gorohovsky/herdr-agent-groups
+
+# or register code you already copied there (plugin link *is* forwardable,
+# and the path must be absolute and already exist on the host)
+rsync -az ~/Projects/herdr-agent-groups/ mac:Projects/herdr-agent-groups/
+herdr --machine mac plugin link /Users/me/Projects/herdr-agent-groups
+herdr --machine mac plugin action invoke agent-groups.list
+```
+
+Keys and the `[ui.sidebar.agents]` row live in the **local client** config and
+apply to every machine. Groups do not sync: each host keeps its own
+`groups.json`. On a client that shows several machines at once, `view groups`
+(sort) is safe for the combined list, while `view group <name>` filters by the
+`group` token and therefore hides agents whose machine has no such group.
 
 ## The manager
 

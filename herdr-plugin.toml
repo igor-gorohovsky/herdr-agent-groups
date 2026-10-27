@@ -9,16 +9,16 @@ platforms = ["linux", "macos"]
 # Reapply group tokens + sidebar view after a server restart, since pane
 # metadata and agent views are transient server state.
 [[startup]]
-command = ["node", "bin/cli.js", "sync", "--quiet"]
+command = ["/bin/sh", "bin/run.sh", "sync", "--quiet"]
 
 # Reapply/prune when panes disappear.
 [[events]]
 on = "pane.closed"
-command = ["node", "bin/cli.js", "sync", "--quiet"]
+command = ["/bin/sh", "bin/run.sh", "sync", "--quiet"]
 
 [[events]]
 on = "pane.agent_detected"
-command = ["node", "bin/cli.js", "sync", "--quiet"]
+command = ["/bin/sh", "bin/run.sh", "sync", "--quiet"]
 
 # Actions run headless, so they open the manager pane instead of drawing a UI.
 [[actions]]
@@ -26,42 +26,42 @@ id = "manage"
 title = "Agent groups: manage"
 description = "Open the manual agent group manager"
 contexts = ["global", "workspace", "tab", "pane"]
-command = ["node", "bin/cli.js", "open", "--entrypoint", "manager"]
+command = ["/bin/sh", "bin/run.sh", "open", "--entrypoint", "manager"]
 
 [[actions]]
 id = "assign-focused"
 title = "Agent groups: assign focused agent"
 description = "Pick a group for the agent in the focused pane"
 contexts = ["global", "workspace", "tab", "pane"]
-command = ["node", "bin/cli.js", "open", "--entrypoint", "assigner"]
+command = ["/bin/sh", "bin/run.sh", "open", "--entrypoint", "assigner"]
 
 [[actions]]
 id = "show-groups"
 title = "Agent groups: sidebar grouped view"
 description = "Sort the sidebar Agent panel by group"
 contexts = ["global", "workspace", "tab", "pane"]
-command = ["node", "bin/cli.js", "view", "groups"]
+command = ["/bin/sh", "bin/run.sh", "view", "groups"]
 
 [[actions]]
 id = "show-all"
 title = "Agent groups: sidebar default view"
 description = "Clear the plugin's sidebar Agent view"
 contexts = ["global", "workspace", "tab", "pane"]
-command = ["node", "bin/cli.js", "view", "off"]
+command = ["/bin/sh", "bin/run.sh", "view", "off"]
 
 [[actions]]
 id = "sync"
 title = "Agent groups: reapply groups"
 description = "Rewrite group tokens and the saved sidebar view"
 contexts = ["global", "workspace", "tab", "pane"]
-command = ["node", "bin/cli.js", "sync"]
+command = ["/bin/sh", "bin/run.sh", "sync"]
 
 [[actions]]
 id = "list"
 title = "Agent groups: print groups"
 description = "Print groups and members to the plugin log"
 contexts = ["global", "workspace", "tab", "pane"]
-command = ["node", "bin/cli.js", "list"]
+command = ["/bin/sh", "bin/run.sh", "list"]
 
 [[panes]]
 id = "manager"
@@ -70,7 +70,7 @@ description = "Browse and edit agent groups"
 placement = "popup"
 width = "80%"
 height = "70%"
-command = ["node", "bin/cli.js", "tui"]
+command = ["/bin/sh", "bin/run.sh", "tui"]
 
 [[panes]]
 id = "assigner"
@@ -79,4 +79,4 @@ description = "Assign the focused agent, then close"
 placement = "popup"
 width = "60%"
 height = "50%"
-command = ["node", "bin/cli.js", "tui", "--assign"]
+command = ["/bin/sh", "bin/run.sh", "tui", "--assign"]
