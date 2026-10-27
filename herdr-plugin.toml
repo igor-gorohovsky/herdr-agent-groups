@@ -1,7 +1,8 @@
 id = "agent-groups"
 name = "Agent Groups"
 version = "0.1.0"
-min_herdr_version = "0.9.5"
+# 0.9.1 already ships pane metadata tokens, agent views, and plugin panes.
+min_herdr_version = "0.9.1"
 description = "Manually group agents into named groups and reflect those groups in the Herdr sidebar"
 platforms = ["linux", "macos"]
 

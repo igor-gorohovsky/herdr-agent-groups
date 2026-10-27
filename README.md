@@ -16,7 +16,7 @@ The plugin stores the assignments, writes the tokens, and installs the view.
 
 ## Requirements
 
-- Herdr 0.9.5 or newer
+- Herdr 0.9.1 or newer (verified against 0.9.1 and 0.9.5)
 - `node` on `PATH` (18+); no dependencies, no build step
 
 ## Install
