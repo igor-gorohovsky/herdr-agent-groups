@@ -24,12 +24,17 @@ Commands:
                               Put one agent in a group
   unassign [--pane ID | --agent NAME]
                               Remove one agent from its group
-  view <off|groups|group> [<group>]
-                              Control the sidebar Agent view
+  view <grouped|off|group NAME>  Sidebar Agent view (grouped by default)
   sync [--keep-stale]         Reapply tokens and the saved view
   snippet                     Print the config.toml sidebar snippet
   path                        Print the state file path
 `;
+
+// Piping into head/grep closes stdout early; that is not an error.
+process.stdout.on("error", (error) => {
+  if (error.code === "EPIPE") process.exit(0);
+  throw error;
+});
 
 function log(line = "") {
   process.stdout.write(line + "\n");
@@ -103,6 +108,16 @@ function resolveIdentity(flags, agents) {
     workspace_id: agent ? agent.workspace_id : null,
     agent,
   };
+}
+
+/** Recompute every pane's metadata after a state change. */
+function reconcile(state, { quiet = false } = {}) {
+  try {
+    return applyGroups(state, { warn: quiet ? null : (line) => warn(line) });
+  } catch (error) {
+    if (!quiet) warn(`warning: cannot reach Herdr: ${error.message}`);
+    return null;
+  }
 }
 
 function identityForAssignment(identity) {
@@ -244,20 +259,9 @@ function cmdRemove(argv) {
   const needle = positional.join(" ").trim();
   if (!needle) return fail("usage: agent-groups rm <group>");
   const state = store.load();
-  const agents = requireAgents();
-  const model = buildModel(state, agents, herdr.listPanes());
   const { group, removed } = store.removeGroup(state, needle);
-  for (const entry of removed) {
-    const live = model.assigned.get(entry.pane_id);
-    if (live) {
-      try {
-        herdr.reportGroupToken(entry.pane_id, null);
-      } catch (error) {
-        warn(`warning: ${error.message}`);
-      }
-    }
-  }
   store.save(state);
+  reconcile(state);
   log(`deleted group ${group.name} (cleared ${removed.length} assignment${removed.length === 1 ? "" : "s"})`);
   return applyView(state, { quiet: true });
 }
@@ -273,12 +277,7 @@ function cmdAssign(argv) {
 
   const { group, entry } = store.assign(state, groupName, identityForAssignment(identity));
   store.save(state);
-
-  try {
-    herdr.reportGroupToken(entry.pane_id, group.name);
-  } catch (error) {
-    warn(`warning: could not write the sidebar token: ${error.message}`);
-  }
+  reconcile(state);
   log(`${identity.agent_name || entry.pane_id} -> ${group.name}`);
 }
 
@@ -295,11 +294,7 @@ function cmdUnassign(argv) {
     log(`${identity.agent_name || identity.pane_id} was not in a group`);
     return;
   }
-  try {
-    herdr.reportGroupToken(identity.pane_id, null);
-  } catch (error) {
-    warn(`warning: could not clear the sidebar token: ${error.message}`);
-  }
+  reconcile(state);
   log(`${identity.agent_name || identity.pane_id} -> (ungrouped)`);
 }
 
@@ -310,8 +305,8 @@ async function cmdView(argv) {
 
   if (mode === "off") {
     state.view = { mode: "off", group_id: null };
-  } else if (mode === "groups" || mode === "grouped" || mode === "all") {
-    state.view = { mode: "groups", group_id: null };
+  } else if (mode === "groups" || mode === "grouped" || mode === "all" || !mode) {
+    state.view = { mode: "grouped", group_id: null };
   } else if (mode === "group") {
     const group = store.findGroup(state, positional.slice(1).join(" "));
     if (!group) return fail(`unknown group: ${positional.slice(1).join(" ") || "(none given)"}`);

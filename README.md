@@ -1,18 +1,36 @@
 # Agent Groups for Herdr
 
-Manual agent grouping for [Herdr](https://herdr.dev). Put agents into named
-groups ("TODO", "In review", "Blocked"), see the groups in a popup manager, and
-order or filter Herdr's own sidebar Agent panel by group.
+Manual agent grouping for [Herdr](https://herdr.dev). Name groups
+("1. In Progress", "Review", "Blocked"), assign agents to them, and see them
+grouped in the sidebar's Agent panel — with Herdr's own layout, columns, and
+styling untouched.
 
-Herdr has no built-in grouping, but it does expose the two primitives this
-plugin needs:
+```text
+●  ~ · 1
+   ▸ 1. In Progress · onboarding-client     ← the group name rides the first row
+●  ~ · 1
+   card-type-label                           ← rest of the block
+●  ~ · 1
+   create-cta
+●  ~ · 2
+   ▸ Review · docs
+●  ~ · 2
+   tests
+```
 
-- **pane metadata tokens** — `pane report-metadata --token group=<name>` tags a
-  pane, and `$group` becomes available to Agent sidebar rows.
-- **agent views** — `agent.view.set` sorts or filters the sidebar Agent panel,
-  using the same token.
+Two things make that happen, and nothing else in the UI changes:
 
-The plugin stores the assignments, writes the tokens, and installs the view.
+1. **Ordering.** The plugin writes an invisible sort key per pane and installs
+   one Herdr *agent view* that sorts the Agent panel by it, so the agents of a
+   group become one contiguous block, in group order.
+2. **A heading.** Herdr has no group headers and plugins cannot add sidebar
+   rows, so the group name is carried in the block's *first* row via that pane's
+   display name. Rename a group and the heading follows; remove the agent and
+   the next member becomes the heading (the plugin resyncs on pane events).
+
+The first row of every block is the member your layout puts first (workspace,
+then tab, then pane), so the heading does not hop around while agents change
+state.
 
 ## Requirements
 
@@ -30,108 +48,43 @@ override.
 ```bash
 herdr plugin install igor-gorohovsky/herdr-agent-groups
 herdr plugin list --plugin agent-groups
-herdr plugin action invoke agent-groups.list
 ```
 
-For local development, link the working copy instead:
+No `config.toml` change is needed: the plugin does not touch your keybindings
+and does not override `ui.sidebar.agents`. For local development, link the
+working copy instead:
 
 ```bash
 herdr plugin link ~/Projects/herdr-agent-groups
 ```
 
-Then add what you want to your `~/.config/herdr/config.toml` and reload:
-
-```bash
-herdr server reload-config
-```
-
-### 1. Keys (recommended)
-
-```toml
-[[keys.command]]
-key = "prefix+g"
-type = "plugin_action"
-command = "agent-groups.manage"
-description = "agent groups"
-
-[[keys.command]]
-key = "prefix+shift+g"
-type = "plugin_action"
-command = "agent-groups.assign-focused"
-description = "assign agent to a group"
-```
-
-`prefix+g` opens the manager. `prefix+shift+g` opens it already pointing at the
-agent in the focused pane and closes as soon as you pick a group.
-
-The same two panes are available without a keybinding:
+## The manager
 
 ```bash
 herdr plugin pane open --plugin agent-groups --entrypoint manager
-herdr plugin pane open --plugin agent-groups --entrypoint assigner
 ```
 
-### 2. Show the group in the sidebar (recommended)
-
-```bash
-agent-groups snippet   # or: node bin/cli.js snippet
-```
+Bind it to a key you do not already use, for example `prefix+alt+g`
+(`prefix+g` is Herdr's `goto`, so do not take that one):
 
 ```toml
-[ui.sidebar.agents]
-rows = [
-  ["state_icon", "machine", "workspace", "tab"],
-  ["agent", "$group"],
-]
+[[keys.command]]
+key = "prefix+alt+g"
+type = "plugin_action"
+command = "agent-groups.manage"
+description = "agent groups"
 ```
 
-Without this the sidebar still *orders* by group, but the group name is not
-shown on the row.
-
-### 3. Turn on sidebar grouping
-
-Keys inside the manager, or:
-
-```bash
-node bin/cli.js view groups          # sort the Agent panel by group
-node bin/cli.js view group "TODO"    # show only one group
-node bin/cli.js view off             # hand the sidebar back to Herdr
-```
-
-## Local and remote machines
-
-Herdr registers plugins **per user, per machine**, and plugin actions run on the
-server you are viewing. Copy the plugin onto every machine that runs agents.
-
-```bash
-# on the remote host itself (plugin install is not forwardable)
-herdr plugin install igor-gorohovsky/herdr-agent-groups
-
-# or register code you already copied there (plugin link *is* forwardable,
-# and the path must be absolute and already exist on the host)
-rsync -az ~/Projects/herdr-agent-groups/ mac:Projects/herdr-agent-groups/
-herdr --machine mac plugin link /Users/me/Projects/herdr-agent-groups
-herdr --machine mac plugin action invoke agent-groups.list
-```
-
-Keys and the `[ui.sidebar.agents]` row live in the **local client** config and
-apply to every machine. Groups do not sync: each host keeps its own
-`groups.json`. On a client that shows several machines at once, `view groups`
-(sort) is safe for the combined list, while `view group <name>` filters by the
-`group` token and therefore hides agents whose machine has no such group.
-
-## The manager
-
-```
+```text
  Agent Groups                                        view: grouped
 
-  1. TODO (2)
-     ● api              w1:p1    working
-     ○ pi               w1:p2    idle
-  2. In review (1)
-     ✓ tests            w1:p3    done
-     (ungrouped) (1)
-     ▲ docs             w2:p1    blocked
+  1. 1. In Progress (2)
+     ● onboarding-client  wG:p18   working
+     ○ create-cta         wG:p1B   idle
+  2. Review (1)
+     ✓ tests              wG:p19   done
+     (ungrouped) (5)
+     ○ claude             wG:p7    idle
 
 ↑↓ move   1-9 assign   u unassign   n new   r rename   d delete   s sync
 enter focus   v sidebar view   q close
@@ -146,16 +99,31 @@ enter focus   v sidebar view   q close
 | `r` | Rename the selected group |
 | `d` `d` | Delete the selected group (press twice) |
 | `enter` | Jump to the selected agent's pane and close |
-| `v` | Cycle the sidebar view: off → grouped → only the selected group |
-| `s` | Reapply tokens and the saved view |
+| `v` | Cycle the sidebar view: grouped → only this group → off |
+| `s` | Reapply metadata and view |
 | `q` / `esc` | Close |
 
-Numbered group headers are the digit targets. A group you have never assigned
-anything to still appears, so you can create the group first and fill it later.
+Group numbers are the digit targets; a group with no members still appears so
+you can create it first and fill it later. `--assign` (the `assigner` pane)
+starts on the focused pane's agent and closes as soon as you pick a group.
+
+## Sidebar views
+
+The plugin owns exactly one thing in the sidebar: an agent view, applied with
+source `plugin:agent-groups`, so Herdr only lets it replace or clear its own.
+
+```bash
+node bin/cli.js view grouped      # default: sort by group, headings on first rows
+node bin/cli.js view group Review # only that group
+node bin/cli.js view off          # hand the panel back to Herdr untouched
+```
+
+`view off` restores Herdr's own ordering immediately and is remembered; the
+plugin will not reapply a view until you ask for one.
 
 ## CLI
 
-The CLI is the same code the manifest actions run, so you can script it:
+The CLI is the same code the manifest commands run, so you can script it:
 
 ```bash
 node bin/cli.js add "In review"
@@ -165,24 +133,25 @@ node bin/cli.js assign TODO              # focused agent (default)
 node bin/cli.js unassign
 node bin/cli.js rm "In review"
 node bin/cli.js list [--json]
-node bin/cli.js view <off|groups|group> [<group>]
-node bin/cli.js open [--entrypoint manager|assigner]
+node bin/cli.js view <grouped|off|group NAME>
 node bin/cli.js sync [--keep-stale]
+node bin/cli.js open [--entrypoint manager|assigner]
+node bin/cli.js snippet   # optional: show the group on EVERY row via $group
 node bin/cli.js path
 ```
 
-`--pane`/`--agent` default to the focused pane, so running `agent-groups assign
-TODO` from a pane's shell groups that pane's agent.
+`--pane`/`--agent` default to the focused pane, so running
+`agent-groups assign TODO` from a pane's shell groups that pane's agent.
 
 ## Actions in the manifest
 
 | Action id | What it does |
 | --- | --- |
-| `agent-groups.manage` | Open the manager popup |
+| `agent-groups.manage` | Open the manager |
 | `agent-groups.assign-focused` | Assign the focused agent in a small popup |
-| `agent-groups.show-groups` | Sidebar sorted by group |
+| `agent-groups.show-groups` | Apply the grouped sidebar view |
 | `agent-groups.show-all` | Clear the plugin's view |
-| `agent-groups.sync` | Reapply tokens and view |
+| `agent-groups.sync` | Reapply metadata and view |
 | `agent-groups.list` | Print the group list to the plugin log |
 
 ## How it works
@@ -195,29 +164,51 @@ TODO` from a pane's shell groups that pane's agent.
    `workspace_id`. The agent name is the strong identity (Herdr keeps a live
    agent name with its pane occupant); the pane id is the fallback for unnamed
    agents.
-2. Every assignment becomes one `pane report-metadata --token group=<name>`
-   call from source `plugin:agent-groups`.
-3. The sidebar view is one `agent.view.set` request with the same source, so
-   Herdr only lets this plugin replace or clear its own view.
-4. Tokens and views live in server memory. The `[[startup]]` hook, the
-   `pane.closed` / `pane.agent_detected` event hooks, and `sync` reapply them,
-   heal pane ids when an agent moves, and prune assignments for closed panes.
+2. Each assigned pane gets two tokens: `group` (the name, also used by the
+   single-group filter) and `groupsort` (the ordering key). The block's first
+   pane additionally gets a display name `▸ <group> · <agent>`.
+3. One agent view sorts the panel by `groupsort`. Ungrouped agents have no key
+   and therefore sort last, after the grouped blocks.
+4. Tokens, display names, and views live in server memory. The `[[startup]]`
+   hook, the `pane.closed` / `pane.agent_detected` event hooks, and `sync`
+   reapply them, heal pane ids when an agent moves, and prune closed panes.
+   Every write is diffed first, so an idle sync makes no Herdr calls.
+
+## Local and remote machines
+
+Herdr registers plugins **per user, per machine**, and plugin actions run on the
+server you are viewing. Install it on every machine that runs agents:
+
+```bash
+# on the remote host itself (plugin install is not forwardable)
+herdr plugin install igor-gorohovsky/herdr-agent-groups
+
+# or register code you already copied there (plugin link *is* forwardable,
+# and the path must be absolute and already exist on the host)
+rsync -az ~/Projects/herdr-agent-groups/ mac:Projects/herdr-agent-groups/
+herdr --machine mac plugin link /Users/me/Projects/herdr-agent-groups
+herdr --machine mac plugin update agent-groups
+```
+
+Groups do not sync between machines: each host keeps its own `groups.json`. On a
+client that shows several machines at once, `view grouped` sorts the combined
+list while `view group <name>` filters by token and therefore hides agents whose
+machine has no such group.
 
 ## Known limits
 
-- Agent rows sort **alphabetically by group name** in the sidebar (that is how
-  token sorts work). Name groups to control the order, for example
-  `1 todo`, `2 review`, `3 done`.
-- Only one view is active at a time: off, grouped, or one group.
-- `manager` is a popup, not a sidebar panel; Herdr plugins cannot draw into the
-  sidebar.
-- Linux and macOS only. `agent.view.set` is reached over the Unix socket, which
-  this plugin does not yet speak on Windows.
-- Groups are per user and shared across named sessions, like any Herdr plugin.
+- The group name appears once per block, on its first row — Herdr has no sidebar
+  headers and plugin v1 cannot add rows to the side panel.
+- Block order is group order (as created in the manager), then workspace, tab,
+  and pane. There is no custom sort yet.
+- One view is active at a time: grouped, one group, or off.
+- Linux and macOS only; `agent.view.set` is reached over the Unix socket, which
+  this plugin does not speak on Windows.
 
 ## Next steps
 
 - Automatic groups: a hook that maps an external ticket status onto
   `agent-groups assign <status>` would remove the manual step.
-- Group colors via other sidebar tokens.
-- Per-group keys once Herdr supports arguments in plugin actions.
+- Reordering groups (the manager lists them in creation order).
+- Group colors via additional sidebar tokens, for people who do override
+  `ui.sidebar.agents` themselves.

@@ -118,6 +118,15 @@ class Manager {
     store.save(this.state);
   }
 
+  /** Recompute pane metadata in Herdr after a local edit. */
+  reconcile() {
+    try {
+      return applyGroups(this.state, { warn: (line) => this.say(line, true) });
+    } catch (error) {
+      return { error: error.message };
+    }
+  }
+
   assign(groupIndex) {
     const row = this.currentRow;
     if (!row || row.kind !== "agent") {
@@ -137,19 +146,8 @@ class Manager {
         workspace_id: agent.workspace_id || null,
       });
       this.save();
-      let tokenError = null;
-      try {
-        herdr.reportGroupToken(agent.pane_id, result.group.name);
-      } catch (error) {
-        tokenError = error.message;
-      }
-      this.reload();
-      this.say(
-        tokenError
-          ? `saved, but Herdr rejected the token: ${tokenError}`
-          : `${agentLabel(agent)} \u2192 ${result.group.name}`,
-        Boolean(tokenError),
-      );
+      const summary = this.reconcile();
+      this.say(`${agentLabel(agent)} \u2192 ${result.group.name}${summary.error ? ` (Herdr: ${summary.error})` : ""}`, Boolean(summary.error));
       if (this.assignMode) this.quit = true;
     } catch (error) {
       this.say(error.message, true);
@@ -163,18 +161,8 @@ class Manager {
       const agent = row.agent;
       store.unassign(this.state, { pane_id: agent.pane_id, agent_name: agent.name || null });
       this.save();
-      let tokenError = null;
-      try {
-        herdr.reportGroupToken(agent.pane_id, null);
-      } catch (error) {
-        tokenError = error.message;
-      }
-      this.say(
-        tokenError
-          ? `saved, but Herdr rejected the token: ${tokenError}`
-          : `${agentLabel(agent)} \u2192 (ungrouped)`,
-        Boolean(tokenError),
-      );
+      const summary = this.reconcile();
+      this.say(`${agentLabel(agent)} \u2192 (ungrouped)${summary.error ? ` (Herdr: ${summary.error})` : ""}`, Boolean(summary.error));
     } else if (row.kind === "stale") {
       store.unassign(this.state, {
         pane_id: row.entry.assignment.pane_id,
@@ -201,19 +189,10 @@ class Manager {
       return;
     }
     this.armedDelete = null;
-    const members = this.rows.filter(
-      (entry) => entry.kind === "agent" && entry.group && entry.group.id === row.group.id,
-    );
     try {
       store.removeGroup(this.state, row.group.id);
       this.save();
-      for (const entry of members) {
-        try {
-          herdr.reportGroupToken(entry.agent.pane_id, null);
-        } catch {
-          /* pane may be gone */
-        }
-      }
+      this.reconcile();
       this.say(`deleted group ${row.group.name}`);
       this.reload();
       this.refreshView({ quiet: true });
@@ -273,8 +252,8 @@ class Manager {
     const row = this.currentRow;
     const group = row && row.group ? row.group : null;
     if (this.state.view.mode === "off") {
-      this.state.view = { mode: "groups", group_id: null };
-    } else if (this.state.view.mode === "groups" && group) {
+      this.state.view = { mode: "grouped", group_id: null };
+    } else if (this.state.view.mode === "grouped" && group) {
       this.state.view = { mode: "group", group_id: group.id };
     } else {
       this.state.view = { mode: "off", group_id: null };
