@@ -1,0 +1,81 @@
+id = "agent-groups"
+name = "Agent Groups"
+version = "0.1.0"
+min_herdr_version = "0.9.5"
+description = "Manually group agents into named groups and reflect those groups in the Herdr sidebar"
+platforms = ["linux", "macos"]
+
+# Reapply group tokens + sidebar view after a server restart, since pane
+# metadata and agent views are transient server state.
+[[startup]]
+command = ["node", "bin/cli.js", "sync", "--quiet"]
+
+# Reapply/prune when panes disappear.
+[[events]]
+on = "pane.closed"
+command = ["node", "bin/cli.js", "sync", "--quiet"]
+
+[[events]]
+on = "pane.agent_detected"
+command = ["node", "bin/cli.js", "sync", "--quiet"]
+
+# Actions run headless, so they open the manager pane instead of drawing a UI.
+[[actions]]
+id = "manage"
+title = "Agent groups: manage"
+description = "Open the manual agent group manager"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["node", "bin/cli.js", "open", "--entrypoint", "manager"]
+
+[[actions]]
+id = "assign-focused"
+title = "Agent groups: assign focused agent"
+description = "Pick a group for the agent in the focused pane"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["node", "bin/cli.js", "open", "--entrypoint", "assigner"]
+
+[[actions]]
+id = "show-groups"
+title = "Agent groups: sidebar grouped view"
+description = "Sort the sidebar Agent panel by group"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["node", "bin/cli.js", "view", "groups"]
+
+[[actions]]
+id = "show-all"
+title = "Agent groups: sidebar default view"
+description = "Clear the plugin's sidebar Agent view"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["node", "bin/cli.js", "view", "off"]
+
+[[actions]]
+id = "sync"
+title = "Agent groups: reapply groups"
+description = "Rewrite group tokens and the saved sidebar view"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["node", "bin/cli.js", "sync"]
+
+[[actions]]
+id = "list"
+title = "Agent groups: print groups"
+description = "Print groups and members to the plugin log"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["node", "bin/cli.js", "list"]
+
+[[panes]]
+id = "manager"
+title = "Agent groups"
+description = "Browse and edit agent groups"
+placement = "popup"
+width = "80%"
+height = "70%"
+command = ["node", "bin/cli.js", "tui"]
+
+[[panes]]
+id = "assigner"
+title = "Assign agent to group"
+description = "Assign the focused agent, then close"
+placement = "popup"
+width = "60%"
+height = "50%"
+command = ["node", "bin/cli.js", "tui", "--assign"]
